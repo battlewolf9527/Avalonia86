@@ -46,6 +46,8 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        //System.IO.File.WriteAllText("/tmp/avalonia86_debug.log", "App started\n");
+
         //Causes current app to determine startup path
         if (CurrentApp.IsLinux)
         {
@@ -57,10 +59,12 @@ internal static class Program
 
         try
         {
-
             //Causes the databases to load.
             if (!Core.DBStore.HasDatabase || !Tools.HWDB.HasDatabase)
+            {
+                //System.IO.File.AppendAllText("/tmp/avalonia86_debug.log", "Leaving the app because of DB.\n");
                 return -1;
+            }
         }
         catch (TypeInitializationException e)
         {
@@ -72,6 +76,8 @@ internal static class Program
 
             return -1;
         }
+
+        //System.IO.File.AppendAllText("/tmp/avalonia86_debug.log", "DB is GO.\n");
 
         try
         {
@@ -85,7 +91,12 @@ internal static class Program
             //If it's not, we need to restore and focus the existing window, 
             //as well as pass on any potential command line arguments
             if (CheckRunningManagerAndAbort(args, frmMain.WindowTitle))
+            {
+                //System.IO.File.AppendAllText("/tmp/avalonia86_debug.log", "Instance check.\n");
                 return -1;
+            }
+
+            //System.IO.File.AppendAllText("/tmp/avalonia86_debug.log", "Starting.\n");
 
             //Note, If you wish to do anything on application exit, do it in App.axaml.cs
             return startIt.StartWithClassicDesktopLifetime(args);

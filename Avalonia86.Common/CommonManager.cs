@@ -1,8 +1,10 @@
+#define NEW_CHECK
+using Avalonia86.API;
 using System;
+using System.Buffers.Text;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Collections.Generic;
-using Avalonia86.API;
 
 namespace Avalonia86.Common;
 
@@ -10,9 +12,17 @@ public abstract class CommonManager : IManager
 {
     private IntPtr _lastEnemy;
 
+#if NEW_CHECK
+    //Static to prevent the GC from removing it.
+    private static System.Threading.Mutex _appMutex;
+#endif
+
     public virtual bool IsFirstInstance(string name)
     {
-        var entry = Process.GetCurrentProcess().MainModule.FileName;//Assembly.GetEntryAssembly()?.Location;
+        //Keeping the old code for now. Mutex can probably be used to restore the app, but
+        //I have not yet looked into it. I am also unsure if the restore feature even works
+        //on Linux.
+        var entry = Process.GetCurrentProcess().MainModule.FileName;
         if (entry != null)
         {
             var exeName = Path.GetFileNameWithoutExtension(entry);
@@ -22,10 +32,37 @@ public abstract class CommonManager : IManager
                 if (proc.Id != myProcId)
                 {
                     _lastEnemy = new IntPtr(proc.Id);
+#if !NEW_CHECK
                     return false;
+#else
+                    break;
+#endif
                 }
         }
+
+
+#if NEW_CHECK
+
+        // This is a unique name that hopefully no other application uses
+        const string MutexName = @"Global\Avalonia86_SingleInstanceLock";
+
+        // Flag to indicate if this is the first instance
+        bool isFirstInstance;
+
+        try
+        {
+            // Try to create the Mutex. If it already exists, it but will return a reference to the existing one.
+            _appMutex = new System.Threading.Mutex(true, MutexName, out isFirstInstance);
+        }
+        catch (Exception)
+        {
+            isFirstInstance = false;
+        }
+
+        return isFirstInstance;
+#else
         return true;
+#endif      
     }
 
     public virtual IntPtr RestoreAndFocus(string title, string handleTitle)
