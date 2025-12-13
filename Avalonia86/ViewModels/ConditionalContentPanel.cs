@@ -294,7 +294,7 @@ public class ConditionalContentPanel : Panel
         {
             // Non-collapsed: enforce min and max ratios (to mirror Arrange)
             double imageH = Math.Max(minImageHeight, Math.Min(aspectHeight, naturalHeight));
-            imageH = Math.Min(imageH, maxImageHeightByRatio); // NEW: apply cap for actual image height
+            imageH = Math.Min(imageH, maxImageHeightByRatio);
 
             double contentH =
                 Math.Max(0,

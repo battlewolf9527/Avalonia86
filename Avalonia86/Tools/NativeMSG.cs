@@ -30,7 +30,7 @@ internal static class NativeMSG
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, int[] attrValue, int attrSize);
 
     /// <summary>
-    /// Workarround for this feature being missing from Windows 10
+    /// Workaround for this feature being missing from Windows 10
     /// </summary>
     public static void SetDarkMode(Window w)
     {

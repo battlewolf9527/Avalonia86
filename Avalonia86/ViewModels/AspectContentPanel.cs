@@ -9,7 +9,7 @@ namespace Avalonia86.ViewModels;
 /// 
 /// Behavior:
 /// - Hosts exactly 1 child:
-///     - The child is typically an image.
+///     - The child is always an image.
 /// - Image sizing rules:
 ///     - If <see cref="DoAspectCorrection"/> returns true, the image is forced to 4:3 aspect ratio.
 ///     - Other images are given their natural aspect ratio.
@@ -189,14 +189,12 @@ public class AspectContentPanel : Panel
     /// This method checks if the control's DataContext is a MainModel, and if a Machine
     /// and a SelectedImage are present. If so, it inspects the filename of the selected image.
     /// 
-    /// PNG images are forced into a 4:3 aspect ratio because they typically represent
-    /// screenshots or assets from CGA, EGA, or VGA games, and there is no reliable way
-    /// to determine their true aspect ratio from metadata or pixel dimensions alone.
+    /// PNG images are forced into a 4:3 aspect ratio because they typically screenshots 
+    /// from CGA, EGA, or VGA games, and there is no reliable way to determine their true 
+    /// aspect ratio from metadata or pixel dimensions alone.
     /// 
     /// JPEG and other formats are assumed to be user-supplied and are displayed using
-    /// their natural aspect ratio. A PNG image supplied by the user will also be forced
-    /// into 4:3, as the format itself does not provide sufficient information to infer
-    /// the correct aspect ratio.
+    /// their natural aspect ratio.
     /// </summary>
     private bool DoAspectCorrection(Control ctrl)
     {

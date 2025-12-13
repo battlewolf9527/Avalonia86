@@ -16,7 +16,7 @@ namespace Avalonia86.ViewModels;
 internal class MainModel : ReactiveObject, IDisposable
 {
     /// <summary>
-    /// Needed util this feature gets implemented:
+    /// Needed until this feature gets implemented:
     /// https://github.com/AvaloniaUI/Avalonia/issues/17029
     /// </summary>
     public static readonly VMVisual Dummy = new VMVisual();

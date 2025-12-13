@@ -45,7 +45,7 @@ internal class Machine : IDisposable
     /// 
     /// Note, _throttle_timer is used as a lock object for _fld_size_timer and
     ///       _last_fld_chk. This has nothing to do with _throttle_timer, it's
-    ///       simply a convinient lock object.
+    ///       simply a convenient lock object.
     /// </remarks>
     private readonly Timer _throttle_timer = new Timer(125) { AutoReset = false };
 
@@ -110,7 +110,7 @@ internal class Machine : IDisposable
         //Only on Windows can we be confident that the conf file has
         //been updated within 75ms. By setting it to 250ms, we can be
         //reasonably sure of this on Mac and Linux as well.
-        //(This because windows knows when the emu is actually running,
+        //(This because Windows knows when the emu is actually running,
         // this info is not avalible on other platforms)
         if (!CurrentApp.IsWindows)
         {
@@ -157,7 +157,7 @@ internal class Machine : IDisposable
         //3. Check size of folder
         //   When: Any changes besides rename
         //   If it's not running, calc
-        //   If machine is running, only calc once every 10 miniutes, so that we don't catch every HD write.
+        //   If machine is running, only calc once every 10 minutes, so that we don't catch every HD write.
 
         //Ignore events when... doing a job and the three types match. 
         // - Oftentimes multiple events are fired in short succesion. Handeling each might bog down the app.
@@ -196,7 +196,7 @@ internal class Machine : IDisposable
             //
             //The "_current.Tag.Status == VM.STATUS_RUNNING" is here because 86Box will
             //modify 86Box.conf while paused, in some way, which does not include the changes,
-            //se we wait until the emu is actually running.
+            //so we wait until the emu is actually running.
             //
             //This is quite dependent on quirks of 86Box, making it fragile. A more robust
             //solution is probably to set the throttle_timer to a much higher value.
@@ -210,8 +210,8 @@ internal class Machine : IDisposable
             //A change has happened to the screenshots or printer folder.
             // Using "startswith" for screenshots, as there is a difference between debug and release builds.
             // On both Windows and Linux, the release build only sends "Created" for the second file created
-            // in the screenshot folder. Fortunatly, startswith catches them and since events are throlled, it
-            // dosn't matter that we catch more than one such event. 
+            // in the screenshot folder. Fortunatly, startswith catches them and since events are throttled, it
+            // doesn't matter that we catch more than one such event. 
             check_folders = true;
             check_size = true;
         }
@@ -498,7 +498,7 @@ internal class Machine : IDisposable
     {
         if (e.PropertyName == nameof(VMVisual.StatusText))
         {
-            //Note that when the VMRow ovject is "edited", it's actually recreated. Because of this we don't
+            //Note that when the VMRow object is "edited", it's actually recreated. Because of this we don't
             //need to worry about Path changes and such. 
 
             if (_pendingSizeCheck == true && _current.Status != MachineStatus.RUNNING)
@@ -519,7 +519,7 @@ internal class Machine : IDisposable
         }
         else if (e.PropertyName == nameof(VMVisual.Path))
         {
-            //If the path changes, then we need to ensure that we keep watching new path.
+            //If the path changes, then we need to ensure that we keep watching the new path.
             ClearCurrent();
             Update((VMVisual)sender);
         }
@@ -629,7 +629,7 @@ internal class Machine : IDisposable
         mi.VM.HasPrintTray = mi.HasPrinterFolder;
         mi.VM.Images = mi.Images;
 
-        //We hook up the propery event of VMRow so that we can react to changes
+        //We hook up the property event of VMRow so that we can react to changes
         _current.PropertyChanged += _current_PropertyChanged;
 
         //Enable watching the folder for changes
@@ -652,10 +652,12 @@ internal class Machine : IDisposable
     public void Dispose()
     {
         _fsw.Dispose();
+        _pfsw.Dispose();
         _worker.Stop();
 
         //Set worker to null to signal already posted work to stop. This works
-        //because those jobs always executes on the UI thread.
+        //because those jobs always executes on the UI thread (and we're right
+        //now on the UI thread, so we know such work is not ongoing).
         _worker = null;
         
         lock (_throttle_timer)
@@ -665,6 +667,7 @@ internal class Machine : IDisposable
             _fld_size_timer = null;
         }
         _throttle_timer.Dispose();
+        _minutte_clock.Dispose();
     }
 
     private class MachineInfo
@@ -696,7 +699,7 @@ internal class Machine : IDisposable
         public MachineInfo(VMVisual row, int job_id)
         {
             //We grab the path, as the "VMrow" object can be accessed by the UI thread.
-            // We are currently in the UI thread.
+            // We are currently on the UI thread.
             _path = row.Path;
             VM = row;
             JobID = job_id;

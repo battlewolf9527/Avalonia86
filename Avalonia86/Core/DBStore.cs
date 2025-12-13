@@ -469,6 +469,13 @@ internal sealed class DBStore
         }
     }
 
+    /// <remarks>
+    /// Bug:
+    /// Can potentially leak memory if a reader do not read all values, or if an
+    /// exception happens during reading.
+    /// 
+    /// Workaround: Only call this from a "foreach"
+    /// </remarks>
     public IEnumerable<DataReader> Query(string query)
     {
         using (var cmd = NewCommand(query, _db))
@@ -479,6 +486,13 @@ internal sealed class DBStore
         }
     }
 
+    /// <remarks>
+    /// Bug:
+    /// Can potentially leak memory if a reader do not read all values, or if an
+    /// exception happens during reading.
+    /// 
+    /// Workaround: Only call this from a "foreach"
+    /// </remarks>
     public IEnumerable<DataReader> Query(string query, params SQLParam[] parameters)
     {
         using (var cmd = NewCommand(query, _db))

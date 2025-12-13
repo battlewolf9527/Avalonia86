@@ -20,11 +20,11 @@ internal class StyleButton : Button
     /// Defines the <see cref="IsChecked"/> property.
     /// </summary>
     public static readonly StyledProperty<bool> IsCheckedProperty =
-        AvaloniaProperty.Register<ToggleButton, bool>(nameof(IsChecked), false,
+        AvaloniaProperty.Register<StyleButton, bool>(nameof(IsChecked), false,
             defaultBindingMode: BindingMode.TwoWay);
 
     /// <summary>
-    /// Gets or sets whether the <see cref="ToggleButton"/> is checked.
+    /// Gets or sets whether the <see cref="StyleButton"/> is checked.
     /// </summary>
     public bool IsChecked
     {
