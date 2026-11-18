@@ -168,6 +168,10 @@ public class VMConfig : ReactiveObject
 
                     switch (mem_card)
                     {
+                        case "ibmat_640k": //Has two mem chips
+                            list.Add(("512", "128"));
+                            def_range = new("1024", "512");
+                            break;
                         case "lotechems": // Lo-tech EMS Board
                             def_range = new(null, "2048", true, "260H");
                             break;
@@ -179,6 +183,8 @@ public class VMConfig : ReactiveObject
                             def_range = new("0", "512", false, "258H");
                             break;
                         case "genericat": // Generic PC/AT Memory Expansion
+                        case "ibmat_2mb":
+                        case "ibmat_512k":
                         case "ibmat": // IBM PC/AT Memory Expansion
                             def_range = new("1024", "512");
                             break;
