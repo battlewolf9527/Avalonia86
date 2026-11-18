@@ -8,6 +8,8 @@ using Avalonia86.Views;
 using Avalonia86.Xplat;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Avalonia86;
 
@@ -18,6 +20,45 @@ internal static class Program
 
     //For grouping windows together in Win7+ taskbar
     private static readonly string AppId = "Avalonia.86Box";
+
+    public static readonly string LogFile = GetLogFile();
+    private static string GetLogFile()
+    {
+        const string appName = "Avalonia86";
+
+        if (AppSettings.Settings.EnableLogging) 
+        {
+            var p = AppSettings.Settings.LogPath;
+
+            if (Directory.Exists(p))
+            {
+                return Path.Combine(p, appName + ".log");
+            }
+
+            if (OperatingSystem.IsWindows())
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), appName, "app.log");
+
+            if (OperatingSystem.IsMacOS())
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), "Library", "Logs", appName, "app.log");
+
+            if (OperatingSystem.IsLinux())
+            {
+                string stateHome = Environment.GetEnvironmentVariable("XDG_STATE_HOME");
+
+                if (!string.IsNullOrEmpty(stateHome))
+                {
+                    return Path.Combine(stateHome, appName, "app.log");
+                }
+                else
+                {
+                    return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".local", "state", appName, "app.log");
+                }
+            }
+
+        }
+
+        return null;
+    }
 
     internal static frmMain Root;
 
@@ -45,10 +86,19 @@ internal static class Program
         ErrorLog.Add(new ErrorMsg(message, method, ex));
     }
 
+    public static void WriteLog(string message)
+    {
+        if (LogFile != null)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogFile)!);
+            File.AppendAllText(LogFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {message}\n");
+        }
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
-        //System.IO.File.WriteAllText("/tmp/avalonia86_debug.log", "App started\n");
+        WriteLog("App started");
 
         //Causes current app to determine startup path
         if (CurrentApp.IsLinux)

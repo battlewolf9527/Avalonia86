@@ -1149,7 +1149,7 @@ internal class dlgSettingsModel : ReactiveObject, IDisposable
                     IsChanged = true;
                     if (value)
                         _model.SelectedExe = this;
-                    else if (_model.SelectedExe == this)
+                    else if (ReferenceEquals(_model.SelectedExe, this))
                         _model.SelectedExe = null;
                     this.RaisePropertyChanged(nameof(IsChanged));
                 }

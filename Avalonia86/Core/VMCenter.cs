@@ -803,6 +803,17 @@ internal static class VMCenter
 
                 start_file = info.FileName;
 
+                //Log startup information to the log file
+                Program.WriteLog($"Starting 86Box:\n" +
+                    $"86Box FileName: {info.FileName}\n" +
+                    $"Arguments: {info.Arguments}\n" +
+                    $"WorkingDirectory: {info.WorkingDirectory}\n" +
+                    $"UseShellExecute: {info.UseShellExecute}\n" +
+                    $"RedirectStandardOutput: {info.RedirectStandardOutput}\n" +
+                    $"RedirectStandardError: {info.RedirectStandardError}\n" +
+                    $"CreateNoWindow: {info.CreateNoWindow}\n\n");
+
+
                 var p = Process.Start(info);
                 if (p == null)
                     throw new InvalidOperationException($"Could not start: {info.FileName}");
