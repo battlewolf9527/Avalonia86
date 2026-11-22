@@ -169,7 +169,7 @@ public class VMConfig : ReactiveObject
                     switch (mem_card)
                     {
                         case "ibmat_640k": //Has two mem chips
-                            list.Add(("512", "128"));
+                            list.Add(("512", "128")); //In the source it seems the machine just sets the total to 640k, so it might be more correct to do list.Add(("0", "640")) 
                             def_range = new("1024", "512");
                             break;
                         case "lotechems": // Lo-tech EMS Board
