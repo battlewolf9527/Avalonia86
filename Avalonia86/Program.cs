@@ -164,8 +164,8 @@ internal static class Program
         }
         finally
         {
-            Core.DBStore.CloseDatabase();
-            Tools.HWDB.CloseDatabase();
+            try { Core.DBStore.CloseDatabase(); } catch { /* Sometimes the database fails to close. This is likely a bug in external code. */ }
+            try { Tools.HWDB.CloseDatabase(); } catch { }
         }
     }
 

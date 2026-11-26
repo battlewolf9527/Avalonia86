@@ -21,24 +21,38 @@ public class Download86Manager : ReactiveObject
     private double _current_progress;
     private bool _is_working, _is_fetching_log, _is_updating;
     private int? _latest_build;
-    private DateTime? _last_commit;
+    private DateTime? _last_rom_commit, _last_asset_commit;
 
     private const string JENKINS_BASE_URL = "https://ci.86box.net/job/86Box";
     private const string JENKINS_LASTBUILD = JENKINS_BASE_URL + "/lastSuccessfulBuild";
-    private const string ROMS_URL = "https://api.github.com/repos/86Box/roms/";
+
+    private const string GITHUB_URL = "https://api.github.com/repos/86Box/";
+    private const string ROMS_URL = $"{GITHUB_URL}roms/";
     private const string ROMS_COMMITS_URL = $"{ROMS_URL}commits";
     private const string ROMS_ZIP_URL = $"https://github.com/86Box/roms/archive/refs/heads/master.zip";
 
+    private const string Assets_URL = $"{GITHUB_URL}assets/";
+    private const string Assets_COMMITS_URL = $"{Assets_URL}commits";
+    private const string Assets_ZIP_URL = $"https://github.com/86Box/assets/archive/refs/heads/master.zip";
+
     private static class Operation
     {
+        //These must be in the same order the operations are actually done, or the progress bar will skipp around.
+
         public const int Download86Box = 0;
         public const int VerifyExtract86Box = 1;
         public const int Move86BoxToArchive = 2;
         public const int MoveROMsToArchive = 3;
-        public const int Store86BoxToDisk = 4;
+        public const int MoveAssetsToArchive = 4;
+        public const int Store86BoxToDisk = 5;
         public const int DownloadROMs = 5;
         public const int ExtractROMs = 6;
         public const int WriteROMsToDisk = 7;
+        public const int DownloadAssets = 9;
+        public const int ExtractAssets = 10;
+        public const int WriteAssetsToDisk = 11;
+
+        public const int Count = 12;
     }
 
     public abstract class LogJob
@@ -71,7 +85,10 @@ public class Download86Manager : ReactiveObject
         public readonly int Number;
 
         public bool Move86BoxToArchive { get; set; }
+        public bool DownloadExtras { get; set; }
+        public bool DownloadAssets { get; set; }
         public bool DownloadROMs { get; set; }
+        public bool DownloadUsrSet { get; set; }
 
         public string ArchiveName { get; set; }
         public string ArchivePath { get; set; }
@@ -154,13 +171,26 @@ public class Download86Manager : ReactiveObject
 
     public DateTime? LatestRomCommit
     {
-        get => _last_commit;
+        get => _last_rom_commit;
         set
         {
             //Invoke isn't strickly needed, but avoids potential race conditions.
             Dispatcher.UIThread.Invoke(() =>
             {
-                this.RaiseAndSetIfChanged(ref _last_commit, value);
+                this.RaiseAndSetIfChanged(ref _last_rom_commit, value);
+            });
+        }
+    }
+
+    public DateTime? LatestAssetsCommit
+    {
+        get => _last_asset_commit;
+        set
+        {
+            //Invoke isn't strickly needed, but avoids potential race conditions.
+            Dispatcher.UIThread.Invoke(() =>
+            {
+                this.RaiseAndSetIfChanged(ref _last_asset_commit, value);
             });
         }
     }
@@ -200,6 +230,10 @@ public class Download86Manager : ReactiveObject
     ///  6. Download ROMs
     ///  7. Extract ROMs
     ///  8. Write ROMs to disk
+    ///  9. Move Assets to archive
+    ///  10. Download Assets
+    ///  11. Extract Assets
+    ///  12. Write Assets to disk
     ///
     ///Some of these operation can in theory be done in parallel.
     /// </remarks>
@@ -217,16 +251,20 @@ public class Download86Manager : ReactiveObject
 
         //The progress bar is split into sections. Each section is taking a percentage out
         //of one hundred.
-        double[] prog = [
-            26, //Download86Box
-            3,  //VerifyExtract86Box
-            1,  //Move86BoxToArchive
-            1,  //MoveROMsToArchive
-            1,  //Store86BoxToDisk
-            38, //DownloadROMs
-            15, //ExtractROMs
-            15  //WriteROMsToDisk
-        ];
+        double[] prog = new double[Operation.Count];
+        prog[Operation.Download86Box] = 26;
+        prog[Operation.VerifyExtract86Box] = 3;
+        prog[Operation.Move86BoxToArchive] = 1;
+        prog[Operation.MoveROMsToArchive] = 1;
+        prog[Operation.MoveAssetsToArchive] = 1;
+        prog[Operation.Store86BoxToDisk] = 1;
+        prog[Operation.DownloadROMs] = 29;
+        prog[Operation.ExtractROMs] = 7;
+        prog[Operation.WriteROMsToDisk] = 7;
+        prog[Operation.DownloadAssets] = 14;
+        prog[Operation.ExtractAssets] = 5;
+        prog[Operation.WriteAssetsToDisk] = 5;
+
 
         //Removes jobs that won't be done. Note, this isn't perfect, it might
         //decide to skip a job for one reason or another. But, this is what
@@ -238,12 +276,37 @@ public class Download86Manager : ReactiveObject
         }
         if (!job.PreserveROMs)
             prog[Operation.MoveROMsToArchive] = 0;
-        if (!job.DownloadROMs)
+        if (job.DownloadExtras)
+        {
+            if (!job.DownloadUsrSet)
+            {
+                if (!job.DownloadROMs)
+                {
+                    prog[Operation.DownloadROMs] = 0;
+                    prog[Operation.ExtractROMs] = 0;
+                    prog[Operation.WriteROMsToDisk] = 0;
+                    prog[Operation.MoveROMsToArchive] = 0;
+                }
+
+                if (!job.DownloadAssets)
+                {
+                    prog[Operation.DownloadAssets] = 0;
+                    prog[Operation.ExtractAssets] = 0;
+                    prog[Operation.WriteAssetsToDisk] = 0;
+                    prog[Operation.MoveAssetsToArchive] = 0;
+                }
+            }
+        }
+        else
         {
             prog[Operation.DownloadROMs] = 0;
             prog[Operation.ExtractROMs] = 0;
             prog[Operation.WriteROMsToDisk] = 0;
             prog[Operation.MoveROMsToArchive] = 0;
+            prog[Operation.DownloadAssets] = 0;
+            prog[Operation.ExtractAssets] = 0;
+            prog[Operation.WriteAssetsToDisk] = 0;
+            prog[Operation.MoveAssetsToArchive] = 0;
         }
 
         //Adjusts the progress bar so that it adds up to 100
@@ -350,48 +413,31 @@ public class Download86Manager : ReactiveObject
                     throw new NotSupportedException(job.Build.FileName);
                 }
 
-                if (job.DownloadROMs)
+                //There is 1 checkbox for both ROMs and Assets. If it has been set by the user, we dowload both. If it has
+                //been set programatically, we only download the one that has been set.
+
+                if (job.DownloadExtras)
                 {
-                    job.AddLog("");
-                    job.AddLog("Downloading latest ROMs");
-                    job.AddLog("Connecting to: " + ROMS_ZIP_URL);
-                    //Do not reuse memory stream. Linux fails to unzip.
-                    zip_data = new MemoryStream();
-
-                    using (var response = await httpClient.GetAsync(ROMS_ZIP_URL, HttpCompletionOption.ResponseHeadersRead))
+                    if (job.DownloadUsrSet)
                     {
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            job.Error("Failed to contact server");
+                        if (!await DownloadExtras(job, httpClient, calc, ROMS_ZIP_URL, true))
                             return;
-                        }
 
-                        var roms_bytes = response.Content.Headers.ContentLength ?? 80 * 1024 * 1024;
-                        job.AddLog($"Downloading {FolderSizeCalculator.ConvertBytesToReadableSize(roms_bytes)}");
-
-                        using (var zip = await response.Content.ReadAsStreamAsync())
-                        {
-                            var buffer = new byte[81920];
-                            int bytes_read;
-                            int total_bytes_read = 0;
-
-                            while ((bytes_read = await zip.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                            {
-                                zip_data.Write(buffer, 0, bytes_read);
-                                total_bytes_read += bytes_read;
-                                Progress = calc.CalculateProgress(Operation.DownloadROMs, total_bytes_read , roms_bytes);
-                            }
-                        }
+                        if (!await DownloadExtras(job, httpClient, calc, Assets_ZIP_URL, false))
+                            return;
                     }
-
-                    //This is a quick opperation, so I won't bother with having a progress bar or doing it on antoher thread, etc.
-                    job.AddLog($"Finished downloading ROM files - Verifying");
-                    zip_data.Position = 0;
-                    var box_files = ExtractFilesFromZip(Operation.ExtractROMs, zip_data, calc);
-
-                    if (!store_rom_files(box_files, calc, job))
+                    else
                     {
-                        return;
+                        if (job.DownloadROMs)
+                        {
+                            if (!await DownloadExtras(job, httpClient, calc, ROMS_ZIP_URL, true))
+                                return;
+                        }
+                        if (job.DownloadAssets)
+                        {
+                            if (!await DownloadExtras(job, httpClient, calc, Assets_ZIP_URL, false))
+                                return;
+                        }
                     }
                 }
 
@@ -414,21 +460,76 @@ public class Download86Manager : ReactiveObject
         });
     }
 
-    private bool store_rom_files(List<ExtractedFile> files, ProgressCalculator calc, DownloadJob job)
+    private async Task<bool> DownloadExtras(
+        DownloadJob job, HttpClient httpClient, ProgressCalculator calc, 
+        string zip_url, bool DL_ROMs)
     {
-        string rom_dir = null;
+        string what = DL_ROMs ? "ROMs" : "Assets";
+        string what2 = DL_ROMs ? "Assets" : "Asset files";
+        int download = DL_ROMs ? Operation.DownloadROMs : Operation.DownloadAssets;
+        int extract = DL_ROMs ? Operation.ExtractROMs : Operation.ExtractAssets;
+
+        job.AddLog("");
+        job.AddLog($"Downloading latest {what}");
+        job.AddLog("Connecting to: " + zip_url);
+        //Do not reuse memory stream. Linux fails to unzip.
+        var zip_data = new MemoryStream();
+
+        using (var response = await httpClient.GetAsync(zip_url, HttpCompletionOption.ResponseHeadersRead))
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                job.Error("Failed to contact server");
+                return false;
+            }
+
+            var files_bytes = response.Content.Headers.ContentLength ?? 80 * 1024 * 1024;
+            job.AddLog($"Downloading {FolderSizeCalculator.ConvertBytesToReadableSize(files_bytes)}");
+
+            using (var zip = await response.Content.ReadAsStreamAsync())
+            {
+                var buffer = new byte[81920];
+                int bytes_read;
+                int total_bytes_read = 0;
+
+                while ((bytes_read = await zip.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    zip_data.Write(buffer, 0, bytes_read);
+                    total_bytes_read += bytes_read;
+                    Progress = calc.CalculateProgress(download, total_bytes_read, files_bytes);
+                }
+            }
+        }
+
+        //This is a quick opperation, so I won't bother with having a progress bar or doing it on antoher thread, etc.
+        job.AddLog($"Finished downloading {what2} - Verifying");
+        zip_data.Position = 0;
+        var box_files = ExtractFilesFromZip(extract, zip_data, calc);
+
+        if (!store_asset_files(box_files, calc, job, what, DL_ROMs))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool store_asset_files(List<ExtractedFile> files, ProgressCalculator calc, DownloadJob job, string what, bool DL_ROMs)
+    {
+        string extra_dir = null;
+        int write = DL_ROMs ? Operation.WriteROMsToDisk : Operation.WriteAssetsToDisk;
 
         //The propper way of doing this is to collect all this info first. For now, we
-        //disable the settings tab and anything that can change state while proceesing
+        //disable the settings tab and anything that can change state while processing
         //is going on.
         Dispatcher.UIThread.Invoke(() =>
         {
-            rom_dir = job.CurrentExe.VMRoms;
+            extra_dir = DL_ROMs ? job.CurrentExe.VMRoms : job.CurrentExe.VMAssets;
         });
         try
         {
-            job.AddLog($"Writing {files.Count} ROMs to: {rom_dir}");
-            Directory.CreateDirectory(rom_dir);
+            job.AddLog($"Writing {files.Count} {what} to: {extra_dir}");
+            Directory.CreateDirectory(extra_dir);
             int strip = 0;
             if (files.Count > 0)
             {
@@ -442,7 +543,7 @@ public class Download86Manager : ReactiveObject
                 if (file.FileData.Length == 0)
                     continue;
 
-                var dest = Path.Combine(rom_dir, file.FilePath.Substring(strip));
+                var dest = Path.Combine(extra_dir, file.FilePath.Substring(strip));
                 var dest_dir = Path.GetDirectoryName(dest);
                 if (!Directory.Exists(dest_dir))
                     Directory.CreateDirectory(dest_dir);
@@ -450,16 +551,16 @@ public class Download86Manager : ReactiveObject
                     File.Delete(dest);
                 File.WriteAllBytes(dest, file.FileData.ToArray());
 
-                Progress = calc.CalculateProgress(Download86Manager.Operation.WriteROMsToDisk, c, files.Count);
+                Progress = calc.CalculateProgress(write, c, files.Count);
             }
 
-            Progress = calc.CalculateProgress(Download86Manager.Operation.WriteROMsToDisk, 1, 1);
+            Progress = calc.CalculateProgress(write, 1, 1);
 
-            job.AddLog($"ROMs has been updated.");
+            job.AddLog($"{what} has been updated.");
             job.FireUpdate();
             
         }
-        catch (Exception e) { job.Error("Failed to update ROMs: " + e.Message); }
+        catch (Exception e) { job.Error($"Failed to update {what}: " + e.Message); }
 
         return true;
     }
@@ -469,6 +570,7 @@ public class Download86Manager : ReactiveObject
         string store_path = null;
         string vm_exe = null;
         string rom_dir = null;
+        string asset_dir = null;
 
         //The propper way of doing this is to collect all this info first. For now, we
         //disable the settings tab and anything that can change state while proceesing
@@ -481,6 +583,7 @@ public class Download86Manager : ReactiveObject
             else
                 store_path = Path.GetDirectoryName(vm_exe);
             rom_dir = job.CurrentExe.VMRoms;
+            asset_dir = job.CurrentExe.VMAssets;
         });
 
 
@@ -510,17 +613,20 @@ public class Download86Manager : ReactiveObject
                     var dest_dir = Path.Combine(path, "roms");
 
                     //If we're downloading new roms, move them.
-                    if (job.DownloadROMs)
+                    if (job.DownloadExtras)
                     {
-                        try
+                        if (job.DownloadUsrSet || job.DownloadROMs)
                         {
-                            job.AddLog("Moving ROMs to archive");
-                            job.AddLog(" - Source: " + rom_dir);
-                            job.AddLog(" - Dest: " + dest_dir);
-                            Directory.Move(rom_dir, dest_dir);
-                            Progress = calc.CalculateProgress(Download86Manager.Operation.MoveROMsToArchive, 0, 1);
+                            try
+                            {
+                                job.AddLog("Moving ROMs to archive");
+                                job.AddLog(" - Source: " + rom_dir);
+                                job.AddLog(" - Dest: " + dest_dir);
+                                Directory.Move(rom_dir, dest_dir);
+                                Progress = calc.CalculateProgress(Download86Manager.Operation.MoveROMsToArchive, 0, 1);
+                            }
+                            catch { job.Error("Failed to archive roms"); }
                         }
-                        catch { job.Error("Failed to archive roms"); }
                     }
                     else
                     {
@@ -548,6 +654,28 @@ public class Download86Manager : ReactiveObject
                         //    }
                         //}
                         //catch { _m.ErrorToUpdateLog("Failed to archive roms"); }
+                    }
+                }
+
+                if (job.PreserveROMs && Directory.Exists(asset_dir))
+                {
+                    var dest_dir = Path.Combine(path, "assets");
+
+                    //If we're downloading new assets, move them.
+                    if (job.DownloadExtras)
+                    {
+                        if (job.DownloadUsrSet || job.DownloadAssets)
+                        {
+                            try
+                            {
+                                job.AddLog("Moving Assets to archive");
+                                job.AddLog(" - Source: " + asset_dir);
+                                job.AddLog(" - Dest: " + dest_dir);
+                                Directory.Move(asset_dir, dest_dir);
+                                Progress = calc.CalculateProgress(Download86Manager.Operation.MoveAssetsToArchive, 0, 1);
+                            }
+                            catch { job.Error("Failed to archive assets"); }
+                        }
                     }
                 }
 
@@ -650,10 +778,55 @@ public class Download86Manager : ReactiveObject
         return extractedFiles;
     }
 
+    private async Task<GithubCommit[]> GithubConnect(FetchJob fjob, HttpClient httpClient, string connect_url, string name)
+    {
+        string github_url = $"{connect_url}?per_page=1";
+
+        GithubCommit[] gjob = null;
+
+        fjob.AddLog("Connecting to: " + connect_url);
+        using (var response = await httpClient.GetAsync(github_url))
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    IEnumerable<string> values;
+                    if (response.Headers.TryGetValues("X-RateLimit-Remaining", out values))
+                    {
+                        foreach (var value in values)
+                        {
+                            if (value == "0")
+                            {
+                                fjob.Error("GitHub rate limit exceeded for your IP address. Please try again later.");
+                                return null;
+                            }
+                        }
+                    }
+                }
+                fjob.Error($"Failed to contact server, {name} download feature will likely not function");
+            }
+            else
+            {
+                using (var json_str = await response.Content.ReadAsStreamAsync())
+                {
+                    gjob = JsonSerializer.Deserialize<GithubCommit[]>(json_str);
+                }
+            }
+        }
+
+        if (gjob != null && (gjob.Length == 0 || gjob[0].Commit == null || gjob[0].Commit.Committer == null))
+        {
+            fjob.Error($"Parsing failed, invalid response");
+            gjob = null;
+        }
+
+        return gjob;
+    }
+
     public void FetchMetadata(FetchJob fjob)
     {
         const string jenkins_url = $"{JENKINS_LASTBUILD}/api/json";
-        const string github_url = $"{ROMS_COMMITS_URL}?per_page=1";
 
         IsWorking = true;
         IsFetching = true;        
@@ -664,44 +837,7 @@ public class Download86Manager : ReactiveObject
 
             try
             {
-                GithubCommit[] gjob = null;
-
-                fjob.AddLog("Connecting to: " + ROMS_COMMITS_URL);
-                using (var response = await httpClient.GetAsync(github_url))
-                {
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-                        {
-                            IEnumerable<string> values;
-                            if (response.Headers.TryGetValues("X-RateLimit-Remaining", out values))
-                            {
-                                foreach (var value in values)
-                                {
-                                    if (value == "0")
-                                    {
-                                        fjob.Error("GitHub rate limit exceeded for your IP address. Please try again later.");
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                        fjob.Error("Failed to contact server, ROM download feature will likely not function");
-                    }
-                    else
-                    {
-                        using (var json_str = await response.Content.ReadAsStreamAsync())
-                        {
-                            gjob = JsonSerializer.Deserialize<GithubCommit[]>(json_str);
-                        }
-                    }
-                }
-
-                if (gjob != null && (gjob.Length == 0 || gjob[0].Commit == null || gjob[0].Commit.Committer == null))
-                {
-                    fjob.Error($"Parsing failed, invalid response");
-                    gjob = null;
-                }
+                GithubCommit[] gjob = await GithubConnect(fjob, httpClient, ROMS_COMMITS_URL, "ROMs");
 
                 if (gjob != null)
                 {
@@ -711,7 +847,18 @@ public class Download86Manager : ReactiveObject
                 }
 
                 fjob.AddLog("");
-                
+
+                gjob = await GithubConnect(fjob, httpClient, Assets_COMMITS_URL, "Assets");
+
+                if (gjob != null)
+                {
+                    var date = gjob[0].Commit.Committer.Date;
+                    fjob.AddLog("Assets last updated: " + date.ToString("d", CultureInfo.CurrentCulture));
+                    LatestAssetsCommit = date;
+                }
+
+                fjob.AddLog("");
+
 
                 JenkinsBuild job;
                 fjob.AddLog("Connecting to: " + jenkins_url);

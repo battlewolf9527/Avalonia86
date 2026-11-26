@@ -82,7 +82,10 @@ public partial class dlgUpdater : BaseWindow
         var dj = new Download86Manager.DownloadJob(_m.SelectedArtifact, _dm.LatestBuild.Value)
         {
             Move86BoxToArchive = !string.IsNullOrWhiteSpace(_m.ArchiveName),
-            DownloadROMs = _m.DownloadROMs,
+            DownloadExtras = _m.DownloadROMs,
+            DownloadROMs = _m.DL_ROMS,
+            DownloadAssets = _m.DownloadAssets,
+            DownloadUsrSet = _m.DL_ROMs_USER_SET,
             ArchiveName = _m.ArchiveName,
             ArchivePath = _m.ArchivePath,
             PreserveROMs = _m.PreserveROMs,
@@ -93,7 +96,9 @@ public partial class dlgUpdater : BaseWindow
         dj.Update += () =>
         {
             _m.RomsLastUpdated = _m.DM.LatestRomCommit;
+            _m.AssetsLastUpdated = _m.DM.LatestAssetsCommit;
             _m.RaisePropertyChanged(nameof(dlgUpdaterModel.RomsLastUpdated));
+            _m.RaisePropertyChanged(nameof(dlgUpdaterModel.AssetsLastUpdated));
         };
         dj.Log += AddToUpdateLog;
         dj.ErrorLog += ErrorToUpdateLog;
@@ -160,7 +165,7 @@ public class dlgUpdaterModel : ReactiveObject, IDisposable
     private dlgUpdaterModel _me;
     private IDtoNAME _sel_os, _sel_arch;
     private Artifact _sel_art;
-    bool _pref_ndr, _upt_roms, _save_roms;
+    bool _pref_ndr, _upt_roms, _save_roms, _dl_roms;
     string _archive_path;
 
     private readonly Download86Manager _dm;
@@ -180,7 +185,10 @@ public class dlgUpdaterModel : ReactiveObject, IDisposable
 
     public bool CanUpdate { get => _dm.LatestBuild != null && _dm.LatestBuild > CurrentBuild; }
 
-    public bool DownloadROMs { get; set; }
+
+    internal bool DL_ROMs_USER_SET = false, DL_ROMS;
+    public bool DownloadROMs { get => _dl_roms; set { _dl_roms = value; DL_ROMs_USER_SET = true; } }
+    public bool DownloadAssets { get; set; }
 
     public bool CanArchive { get => !string.IsNullOrWhiteSpace(_archive_path); }
 
@@ -198,11 +206,24 @@ public class dlgUpdaterModel : ReactiveObject, IDisposable
     public bool HasCLError { get; set; }
 
     public DateTime? RomsLastUpdated { get; set; }
+
+    public DateTime? AssetsLastUpdated { get; set; }
     public string RomsLastUpdatedStr
     {
         get
         {
             var d = RomsLastUpdated;
+            if (d == null) return "N/A";
+
+            return d.Value.ToString("d", CultureInfo.CurrentCulture);
+        }
+    }
+
+    public string AssetsLastUpdatedStr
+    {
+        get
+        {
+            var d = AssetsLastUpdated;
             if (d == null) return "N/A";
 
             return d.Value.ToString("d", CultureInfo.CurrentCulture);
@@ -462,10 +483,15 @@ public class dlgUpdaterModel : ReactiveObject, IDisposable
             CurrentExe.VMRoms = s.ROMdir;
             if (string.IsNullOrWhiteSpace(CurrentExe.VMRoms) || !FolderHelper.IsValidFilePath(CurrentExe.VMRoms))
                 CurrentExe.VMRoms = IOPath.Combine(exe_fld, "roms");
+            CurrentExe.VMAssets = s.AssetDir;
+            if (string.IsNullOrWhiteSpace(CurrentExe.VMAssets) || !FolderHelper.IsValidFilePath(CurrentExe.VMAssets))
+                CurrentExe.VMAssets = IOPath.Combine(exe_fld, "assets");
 
-            //I'm not sure about this.
+            //Looks through the files to determine when they were last updated.
             if (Directory.Exists(CurrentExe.VMRoms))
                 RomsLastUpdated = FolderHelper.GetAModifiedDate(CurrentExe.VMRoms);
+            if (Directory.Exists(CurrentExe.VMAssets))
+                AssetsLastUpdated = FolderHelper.GetAModifiedDate(CurrentExe.VMAssets);
 
             var (exe, info) = VMCenter.GetPathExeInfo();
             if (info != null)
@@ -513,6 +539,7 @@ public class dlgUpdaterModel : ReactiveObject, IDisposable
         Artifact fallback = null;
         bool has_ndr = false;
         bool dl_roms = false;
+        bool dl_assets = false;
 
         //We adjust the selection to the prefered artifact
         if (Artifacts != null)
@@ -549,7 +576,15 @@ public class dlgUpdaterModel : ReactiveObject, IDisposable
             dl_roms = true;
         }
 
-        DownloadROMs = dl_roms;
+        if (UpdateROMs && (AssetsLastUpdated == null || _dm.LatestAssetsCommit != null && (_dm.LatestAssetsCommit.Value > AssetsLastUpdated.Value)))
+        {
+            dl_assets = true;
+        }
+
+        DL_ROMS = dl_roms;
+        DownloadROMs = dl_roms || dl_assets;
+        DownloadAssets = dl_assets;
+        DL_ROMs_USER_SET = false;
     }
 
     public void Commit()
